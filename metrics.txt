@@ -1,0 +1,8 @@
+2077 424 500 2001
+Accuracy: 0.8153
+Precision - Dog: 0.8252
+Precision - Cat: 0.8060
+Recall - Dog: 0.8001
+Recall - Cat: 0.8305
+F1 Score - Dog: 0.8124
+F1 Score - Cat: 0.8180
