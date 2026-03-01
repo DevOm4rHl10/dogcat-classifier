@@ -6,8 +6,8 @@ __pycache__/
 venv/
 woof/   # if this is your venv folder
 data/
-# Saved models
-saved_models/
+
+
 
 # OS files
 .DS_Store

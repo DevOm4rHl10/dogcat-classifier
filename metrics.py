@@ -53,10 +53,14 @@ with torch.no_grad():
 
 # Confusion matrix
 cm = confusion_matrix(all_labels, all_preds)
+"""
+For displaying the confusion matrix : 
 disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=test_dataset.classes)
 disp.plot(cmap=plt.cm.Blues)
 plt.title("Confusion Matrix")
 plt.show()
+"""
+
 
 
 
