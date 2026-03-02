@@ -3,11 +3,8 @@ __pycache__/
 *.pyc
 
 # Virtual environments
-venv/
-woof/   # if this is your venv folder
+woof/  
 data/
-
-
 
 # OS files
 .DS_Store

@@ -1,0 +1,17 @@
+# Ignore your venv
+woof/
+
+# Ignore data (not needed in production)
+data/
+
+# Ignore VSCode settings
+.vscode/
+
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.env
+.git
+.gitignore
+.DS_Store
