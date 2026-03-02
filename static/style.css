@@ -1,0 +1,61 @@
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f4f6fb;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+/* Container styling */
+h1 {
+    text-align: center;
+    margin-bottom: 25px;
+    color: #333;
+}
+
+form {
+    background: white;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+    text-align: center;
+    width: 350px;
+}
+
+/* File input */
+input[type="file"] {
+    margin: 20px 0;
+    width: 100%;
+}
+
+/* Button styling */
+button {
+    background: #4a6cf7;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    width: 100%;
+    transition: 0.3s;
+}
+
+button:hover {
+    background: #3651d4;
+}
+
+/* Prediction text */
+h2 {
+    margin-top: 25px;
+    text-align: center;
+    color: #333;
+}
+
+/* GradCAM image */
+img {
+    max-width: 100%;
+    margin-top: 15px;
+    border-radius: 10px;
+}
