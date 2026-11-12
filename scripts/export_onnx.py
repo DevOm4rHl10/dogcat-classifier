@@ -45,6 +45,17 @@ def export(module, example, path: Path, input_name: str, output_name: str):
     except TypeError:   # older PyTorch without the `dynamo` argument
         torch.onnx.export(module, (example,), str(path), opset_version=17, **kwargs)
 
+    # Newer PyTorch writes the weights to a separate "<name>.data" file. Put them back
+    # inside the .onnx file, so a single file is all the server needs.
+    import onnx
+
+    m = onnx.load(str(path))                    # also reads any external .data file
+    for leftover in path.parent.glob(path.name + "*.data"):
+        leftover.unlink()
+    for leftover in path.parent.glob(path.stem + "*.data"):
+        leftover.unlink()
+    onnx.save_model(m, str(path), save_as_external_data=False)
+
 
 def check(path: Path, module, example):
     """Compare ONNX Runtime with PyTorch on the example input."""
