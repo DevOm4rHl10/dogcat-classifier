@@ -1,17 +1,21 @@
-# Ignore your venv
-woof/
-
-# Ignore data (not needed in production)
+training-data/
 data/
-
-# Ignore VSCode settings
-.vscode/
-
+labelling/
+notebooks/
+*.ipynb
+.ipynb_checkpoints/
 __pycache__/
 *.pyc
-*.pyo
-*.log
-*.env
-.git
+.venv/
+woof/
+scripts/
+venv/
+.git/
 .gitignore
 .DS_Store
+*.png
+saved_models/*
+!saved_models/dogcat_cnn.pth
+!saved_models/gatekeeper_mobilenet_v3_small.pth
+!static/*.png
+README.md

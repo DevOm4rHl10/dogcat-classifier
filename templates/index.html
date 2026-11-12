@@ -1,31 +1,300 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <title>Dog vs Cat Classifier</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Meowf Investigations · Dog or cat?</title>
+  <meta name="description" content="Submit a photo and Inspector Grad, a convolutional neural network, decides whether it shows a dog or a cat, then marks the clues it used in red ink (Grad-CAM).">
+  <meta name="theme-color" content="#3a2c22">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='13' cy='13' r='9' fill='%23fbf7ee' stroke='%232a2420' stroke-width='3.5'/><path d='M20 20l8 8' stroke='%232a2420' stroke-width='5' stroke-linecap='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Special+Elite&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-
 <body>
-    
-    <div class="container">
-        <h1>Dog vs Cat Classifier</h1>
-        <!-- your form + predictions here -->
-        <form action="/predict" method="post" enctype="multipart/form-data">
-            <input type="file" name="file" required>
-            <button type="submit">Predict</button>
-        </form>
+  <header class="masthead">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="currentColor" stroke-width="3"/><path d="M20 20l8 8" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
+      Meowf Investigations
+    </a>
+    <nav><a href="/metrics">Case archive</a></nav>
+  </header>
 
-        {% if prediction %}
-        <h2>Prediction: {{ prediction }}</h2>
-        {% endif %}
+  <main class="desk">
 
-        {% if gradcam_image %}
-        <h2>Grad-CAM:</h2>
-        <img src="data:image/png;base64,{{ gradcam_image }}">
-        {% endif %}
+    {% if error %}
+    <div class="slip" role="alert">
+      <p class="slip-stamp">Returned</p>
+      <p>{{ error }}</p>
     </div>
+    {% endif %}
 
+    {# ------------------------------------------------------------------ verdict #}
+    {% if prediction %}
+    {% set label = prediction|string %}
+    {% set is_dog = label.lower().startswith('dog') %}
+    <section class="folder case" id="result" aria-labelledby="verdict">
+      <p class="folder-tab">Case no. {{ case_no }} · Closed</p>
+      <div class="folder-body case-body">
+        <div class="exhibit">
+          {% if gradcam_image %}
+          <figure class="polaroid">
+            <div class="compare" id="compare">
+              <img class="compare-heat" src="data:image/jpeg;base64,{{ gradcam_image }}"
+                   alt="Evidence photo: the clues that pointed to {{ label|lower }} are marked in red ink" decoding="async">
+              <div class="compare-original" id="compare-original" hidden>
+                <img id="original" alt="Your original photo">
+              </div>
+              <input class="compare-range" id="compare-range" type="range" min="0" max="100" value="50"
+                     aria-label="Slide to compare the evidence print with your original photo" hidden>
+            </div>
+            <figcaption>Exhibit A: clues marked in red ink.<span id="compare-hint" hidden> Drag across to see the original.</span></figcaption>
+          </figure>
+          {% endif %}
+          <h2 class="stamp" id="verdict">{{ label }}{% if confidence is defined and confidence is not none %}<span>{{ '%.0f'|format(confidence * 100) }}% certain</span>{% endif %}</h2>
+        </div>
+
+        <div class="report">
+          <p class="report-title">Inspector's report</p>
+          <dl>
+            <dt>Finding</dt>
+            <dd>{{ label }}.</dd>
+            {% if confidence is defined and confidence is not none %}
+            {% set dog_p = (confidence if is_dog else 1 - confidence) %}
+            <dt>Certainty</dt>
+            <dd>
+              {{ '%.0f'|format(confidence * 100) }}%
+              <span class="scale" role="img" aria-label="On a scale from cat to dog, the marker sits at {{ '%.0f'|format(dog_p * 100) }}% dog">
+                <span class="scale-track"><span class="scale-marker" style="left: {{ '%.1f'|format(dog_p * 100) }}%"></span></span>
+                <span class="scale-ends"><span>Cat</span><span>Dog</span></span>
+              </span>
+            </dd>
+            {% endif %}
+            <dt>Method</dt>
+            <dd>A convolutional neural network. The red ink is Grad-CAM: the regions that pushed it hardest toward “{{ label|lower }}”.</dd>
+          </dl>
+          {% if forced %}
+          <p class="report-note">You overruled the screening, so the inspector had to name a dog or a cat however unlike either the photo is. Take this certainty with a pinch of salt.</p>
+          {% else %}
+          <p class="report-note">Photos showing neither animal are screened out first by an assistant (a pretrained ImageNet model).</p>
+          {% endif %}
+          <a class="button-link" href="#uploader">Open a new case</a>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    {# ------------------------------------------------------------------ not a suspect #}
+    {% if rejected %}
+    <section class="folder case" id="result" aria-labelledby="verdict">
+      <p class="folder-tab">Case no. {{ case_no }} · Dismissed</p>
+      <div class="folder-body case-body">
+        <div class="exhibit">
+          <figure class="polaroid" id="rejected-figure" hidden>
+            <div class="compare"><img class="compare-heat" id="rejected-photo" alt="Your photo"></div>
+            <figcaption>Exhibit A: no dog or cat found.</figcaption>
+          </figure>
+          <h2 class="stamp stamp-wide" id="verdict">Not a suspect</h2>
+        </div>
+        <div class="report">
+          <p class="report-title">Inspector's report</p>
+          <dl>
+            <dt>Finding</dt>
+            <dd>Neither a dog nor a cat.</dd>
+            <dt>Screening</dt>
+            <dd>The assistant (a pretrained ImageNet model) gave it a {{ '%.0f'|format(pet_prob * 100) }}% chance of showing one. Best guess: <strong>{{ looks_like }}</strong>.</dd>
+          </dl>
+          <p class="report-note">The inspector only knows dogs and cats, and would have named one anyway, often with high certainty. That's why this check exists.</p>
+          <div class="actions">
+            <a class="button-link" href="#uploader">Open a new case</a>
+            <button type="button" class="button-quiet" id="force" hidden>Make the inspector choose anyway</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    {# ------------------------------------------------------------------ intake #}
+    {% set has_case = prediction or rejected %}
+    <section class="folder intake{{ ' is-followup' if has_case }}" aria-labelledby="intake-title">
+      <p class="folder-tab">Case no. {{ case_no + 1 if has_case else case_no }} · Awaiting evidence</p>
+      <div class="folder-body intake-body">
+        <div class="intake-copy">
+          {% if has_case %}
+          <h2 class="intake-title" id="intake-title">Open a new case</h2>
+          {% else %}
+          <h1 class="intake-title" id="intake-title">Dog or cat?</h1>
+          <p class="lede">Submit a photo as evidence. Inspector Grad, a convolutional neural network, studies it, names the animal, and marks the clues he relied on in red ink.</p>
+          {% endif %}
+
+          <form class="uploader" id="uploader" action="/predict" method="post" enctype="multipart/form-data">
+            <label class="drop" id="drop" for="file">
+              <input type="file" id="file" name="file" accept="image/jpeg,image/png,image/webp" required>
+              <img class="drop-preview" id="preview" alt="" hidden>
+              <span class="drop-empty" id="drop-empty">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7v9a4 4 0 0 0 8 0V5.5a2.5 2.5 0 0 0-5 0V15a1 1 0 0 0 2 0V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                <span class="drop-title">Attach a photo</span>
+                <span class="drop-hint">or drop it here. JPG, PNG or WebP, one animal per photo</span>
+              </span>
+            </label>
+            <p class="file-name" id="file-name" aria-live="polite"></p>
+            <button type="submit" id="classify">Examine the evidence</button>
+          </form>
+        </div>
+
+        {% if not has_case %}
+        <div class="intake-side">
+          <figure class="inspector">
+            {% include "_inspector.html" %}
+            <figcaption>Inspector Grad. Trained on 15,000 cases. Once called a bin bag a dog, which is why he now has an assistant.</figcaption>
+          </figure>
+          <ol class="procedure" aria-label="How it works">
+            <li>Attach a photo of one dog or one cat.</li>
+            <li>The assistant checks there's a dog or cat in it at all.</li>
+            <li>The inspector names the animal and marks his clues.</li>
+          </ol>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p><a href="/metrics">Case archive: how often the inspector is right</a></p>
+    <p>A student project in computer vision. <a href="https://github.com/DevOm4rHl10/dogcat-classifier">Source on GitHub</a></p>
+  </footer>
+
+  <script>
+  (function () {
+    var MAX_SIDE = 512;           // longest side sent to the server
+    var KEY = 'dvc-original';     // sessionStorage key for the side-by-side view
+    var form = document.getElementById('uploader');
+    var input = document.getElementById('file');
+    var drop = document.getElementById('drop');
+    var preview = document.getElementById('preview');
+    var empty = document.getElementById('drop-empty');
+    var nameEl = document.getElementById('file-name');
+    var button = document.getElementById('classify');
+
+    function store(k, v) { try { v === null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch (e) {} }
+    function load(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+
+    function show(file) {
+      if (!file) return;
+      if (!/^image\//.test(file.type)) { nameEl.textContent = 'That file is not a photo. Attach a JPG, PNG or WebP.'; input.value = ''; return; }
+      preview.src = URL.createObjectURL(file);
+      preview.hidden = false;
+      empty.hidden = true;
+      drop.classList.add('has-image');
+      nameEl.textContent = file.name;
+    }
+
+    input.addEventListener('change', function () { show(input.files[0]); });
+
+    ['dragenter', 'dragover'].forEach(function (t) {
+      drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('is-over'); });
+    });
+    ['dragleave', 'drop'].forEach(function (t) {
+      drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('is-over'); });
+    });
+    drop.addEventListener('drop', function (e) {
+      var f = e.dataTransfer.files[0];
+      if (!f) return;
+      try { var dt = new DataTransfer(); dt.items.add(f); input.files = dt.files; } catch (err) {}
+      show(f);
+    });
+
+    // Shrink large phone photos before upload: a 5 MB photo becomes ~60 KB.
+    function resize(file) {
+      return new Promise(function (resolve) {
+        var img = new Image();
+        img.onload = function () {
+          var s = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
+          var c = document.createElement('canvas');
+          c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          var dataUrl = c.toDataURL('image/jpeg', 0.9);
+          c.toBlob(function (blob) { resolve({ blob: blob, dataUrl: dataUrl }); }, 'image/jpeg', 0.9);
+        };
+        img.onerror = function () { resolve(null); };
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    form.addEventListener('submit', function (e) {
+      var file = input.files[0];
+      if (!file || form.dataset.ready) return;   // let the browser submit as usual
+      e.preventDefault();
+      button.disabled = true;
+      button.textContent = 'Examining…';
+      form.setAttribute('aria-busy', 'true');
+      resize(file).then(function (r) {
+        if (r && r.blob) {
+          store(KEY, r.dataUrl);
+          try {
+            var dt = new DataTransfer();
+            dt.items.add(new File([r.blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }));
+            input.files = dt.files;
+          } catch (err) { /* older browsers: send the original */ }
+        } else { store(KEY, null); }
+        form.dataset.ready = '1';
+        HTMLFormElement.prototype.submit.call(form);
+      });
+    });
+
+    // Re-enable the button if the user comes back with the browser's back button.
+    window.addEventListener('pageshow', function () {
+      button.disabled = false; button.textContent = 'Examine the evidence';
+      delete form.dataset.ready; form.removeAttribute('aria-busy');
+    });
+
+    // Verdict: wipe between the evidence print and the original photo.
+    var original = load(KEY);
+    var wrap = document.getElementById('compare-original');
+    if (original && wrap) {
+      document.getElementById('original').src = original;
+      var range = document.getElementById('compare-range');
+      var compare = document.getElementById('compare');
+      wrap.hidden = false; range.hidden = false;
+      document.getElementById('compare-hint').hidden = false;
+      compare.classList.add('is-comparing');
+      var set = function () { compare.style.setProperty('--split', range.value + '%'); };
+      range.addEventListener('input', set); set();
+    }
+
+    // Not a suspect: show the photo, and offer to make the inspector choose anyway.
+    var forceBtn = document.getElementById('force');
+    if (forceBtn && original) {
+      document.getElementById('rejected-photo').src = original;
+      document.getElementById('rejected-figure').hidden = false;
+      forceBtn.hidden = false;
+      forceBtn.addEventListener('click', function () {
+        forceBtn.disabled = true;
+        forceBtn.textContent = 'Examining…';
+        fetch(original).then(function (r) { return r.blob(); }).then(function (blob) {
+          var f = document.createElement('form');
+          f.method = 'post'; f.action = '/predict'; f.enctype = 'multipart/form-data'; f.hidden = true;
+          var fileInput = document.createElement('input');
+          fileInput.type = 'file'; fileInput.name = 'file';
+          var dt = new DataTransfer();
+          dt.items.add(new File([blob], 'photo.jpg', { type: 'image/jpeg' }));
+          fileInput.files = dt.files;
+          var force = document.createElement('input');
+          force.type = 'hidden'; force.name = 'force'; force.value = '1';
+          f.appendChild(fileInput); f.appendChild(force);
+          document.body.appendChild(f);
+          HTMLFormElement.prototype.submit.call(f);
+        });
+      });
+    }
+
+    var result = document.getElementById('result');
+    if (result && window.matchMedia('(max-width: 899px)').matches) {
+      var calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      result.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
+    }
+  })();
+  </script>
 </body>
-
 </html>

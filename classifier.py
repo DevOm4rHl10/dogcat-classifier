@@ -32,15 +32,24 @@ class DogCatCNN(nn.Module):
         self.fc2 = nn.Linear(512, 1)
         self.dropout = nn.Dropout(0.5)
 
-    def forward(self, x):
+    def features(self, x):
+        """Activations of the last conv block (after ReLU, before pooling).
+        Exposed so Grad-CAM can use them without hooks."""
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = self.pool(F.relu(self.conv3(x)))
+        return F.relu(self.conv3(x))
+
+    def classify(self, feats):
+        """Everything after `features`: pool -> flatten -> fully connected head."""
+        x = self.pool(feats)
         x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         x = self.dropout(x)
-        x = self.fc2(x)
-        return x
+        return self.fc2(x)
+
+    def forward(self, x):
+        # Same computation and same weights as before, so saved checkpoints still load.
+        return self.classify(self.features(x))
 
 
 # =====================================================

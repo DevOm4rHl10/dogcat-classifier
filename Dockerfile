@@ -1,33 +1,26 @@
+# Small, CPU-only image for serving the classifier.
 FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    TF_CPP_MIN_LOG_LEVEL=2 \
+    PORT=8000
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
-    libx11-6 \
-    libxcb1 \
-    libgl1 \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN pip install --no-cache-dir --upgrade pip
-
+# Install dependencies first so this layer is cached between code changes.
 COPY requirements.txt .
+RUN pip install -r requirements.txt
 
-RUN pip install --no-cache-dir \
-    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# Only what the server needs: no datasets, notebooks or training checkpoints.
+COPY app.py classifier.py inference.py gunicorn.conf.py ./
+COPY templates/ templates/
+COPY static/ static/
+COPY saved_models/dogcat_cnn.pth saved_models/gatekeeper_mobilenet_v3_small.pth saved_models/
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN useradd --create-home appuser
+USER appuser
 
-COPY app.py classifier.py metrics.py ./
-COPY saved_models/ ./saved_models/
-COPY templates/ ./templates/
-COPY static/ ./static/
-
-EXPOSE 5000
-
-CMD ["gunicorn", "--workers", "1", "--threads", "2", "--bind", "0.0.0.0:5000", "app:app"]
+EXPOSE 8000
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "app:app"]

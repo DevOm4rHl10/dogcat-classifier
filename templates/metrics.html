@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Case archive · Meowf Investigations</title>
+  <meta name="description" content="Inspector Grad's record: how the dog-vs-cat CNN performs on held-out test photos: confusion matrix, precision, recall, F1, ROC curve and calibration.">
+  <meta name="theme-color" content="#3a2c22">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='13' cy='13' r='9' fill='%23fbf7ee' stroke='%232a2420' stroke-width='3.5'/><path d='M20 20l8 8' stroke='%232a2420' stroke-width='5' stroke-linecap='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Special+Elite&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="masthead">
+  <a class="brand" href="/">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="currentColor" stroke-width="3"/><path d="M20 20l8 8" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
+    Meowf Investigations
+  </a>
+  <nav><a href="/">Open a new case</a></nav>
+</header>
+
+<main class="desk archive">
+  <header class="report-head">
+    <h1 class="intake-title">Case archive</h1>
+    {% if r %}
+    {% set cm = r.confusion_matrix.rows_true_cols_pred %}
+    {% set n_cat = cm[0][0] + cm[0][1] %}{% set n_dog = cm[1][0] + cm[1][1] %}
+    <p class="lede">
+      Inspector Grad's record on {{ '{:,}'.format(r.n) }} closed cases: photos he never saw during
+      training or tuning, {{ '{:,}'.format(n_cat) }} cats and {{ '{:,}'.format(n_dog) }} dogs from the Kaggle Dogs vs. Cats dataset.
+    </p>
+    {% endif %}
+  </header>
+
+  {% if not r %}
+  <section class="panel empty">
+    <h2>The archive is empty</h2>
+    <p>No cases on file yet. Run <code>python metrics.py</code> from the project folder to evaluate the model on
+       <code>data/test</code>, then reload this page.</p>
+  </section>
+  {% else %}
+
+  {# ---------- Headline numbers ---------- #}
+  <section class="stats" aria-label="Summary">
+    <div class="stat">
+      <p class="stat-value">{{ '%.1f'|format(r.accuracy * 100) }}%</p>
+      <p class="stat-name">Accuracy</p>
+      <p class="stat-note">Share of cases he named correctly.</p>
+    </div>
+    <div class="stat">
+      <p class="stat-value">{{ '%.3f'|format(r.macro.f1) }}</p>
+      <p class="stat-name">F1 score, averaged over both classes</p>
+      <p class="stat-note">Balances precision and recall; 1 is perfect.</p>
+    </div>
+    <div class="stat">
+      <p class="stat-value">{{ '%.3f'|format(r.roc.auc) }}</p>
+      <p class="stat-name">ROC AUC</p>
+      <p class="stat-note">Chance that a random dog scores higher than a random cat.</p>
+    </div>
+  </section>
+
+  {# ---------- Confusion matrix + per-class table ---------- #}
+  <section class="panel split">
+    <div>
+      <h2>Confusion matrix</h2>
+      <p class="panel-intro">Each row is the true animal; each column is what the inspector said.</p>
+      {% set cm_max = [cm[0][0], cm[0][1], cm[1][0], cm[1][1]]|max %}
+      <div class="cm" role="table" aria-label="Confusion matrix">
+        <div role="row" class="cm-row cm-head">
+          <span role="columnheader"></span>
+          <span role="columnheader">Said cat</span>
+          <span role="columnheader">Said dog</span>
+        </div>
+        {% for row in cm %}
+        {% set true_label = r.confusion_matrix.labels[loop.index0] %}
+        {% set row_total = row[0] + row[1] %}
+        <div role="row" class="cm-row">
+          <span role="rowheader" class="cm-rowhead">Real {{ true_label|lower }}</span>
+          {% for v in row %}
+          {% set pred_label = r.confusion_matrix.labels[loop.index0] %}
+          {% set share = (v / cm_max) %}
+          {% set tint = (6 + 74 * share)|round|int %}
+          <span role="cell" class="cm-cell {{ 'is-dark' if tint > 45 }}" tabindex="0"
+                style="background: color-mix(in srgb, var(--ink) {{ tint }}%, var(--paper))"
+                data-tip="{{ '{:,}'.format(v) }} real {{ true_label|lower }}s were called {{ pred_label|lower }} ({{ '%.1f'|format(100 * v / row_total) }}% of {{ true_label|lower }}s)">
+            <strong>{{ '{:,}'.format(v) }}</strong>
+            <small>{{ '%.0f'|format(100 * v / row_total) }}%</small>
+          </span>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div>
+      <h2>Per class</h2>
+      <p class="panel-intro">
+        Precision: when it says “dog”, how often it's right. Recall: of all real dogs, how many it finds.
+      </p>
+      <table class="data">
+        <thead><tr><th scope="col">Class</th><th scope="col">Precision</th><th scope="col">Recall</th><th scope="col">F1</th><th scope="col">Photos</th></tr></thead>
+        <tbody>
+          {% for cls, s in r.per_class.items() %}
+          <tr><th scope="row">{{ cls }}</th><td>{{ '%.3f'|format(s.precision) }}</td><td>{{ '%.3f'|format(s.recall) }}</td><td>{{ '%.3f'|format(s.f1) }}</td><td>{{ '{:,}'.format(s.support) }}</td></tr>
+          {% endfor %}
+          <tr class="total"><th scope="row">Average</th><td>{{ '%.3f'|format(r.macro.precision) }}</td><td>{{ '%.3f'|format(r.macro.recall) }}</td><td>{{ '%.3f'|format(r.macro.f1) }}</td><td>{{ '{:,}'.format(r.n) }}</td></tr>
+        </tbody>
+      </table>
+      <p class="fine">Decision threshold: dog if P(dog) &gt; {{ r.threshold }}. Log loss {{ '%.3f'|format(r.log_loss) }}, Brier score {{ '%.3f'|format(r.brier) }}.</p>
+    </div>
+  </section>
+
+  {# ---------- ROC + calibration ---------- #}
+  {% set W = 280 %}{% set H = 220 %}{% set X0 = 48 %}{% set Y0 = 12 %}
+  <section class="panel split">
+    <div>
+      <h2>ROC curve</h2>
+      <p class="panel-intro">
+        Every possible threshold, from strict to lenient. The closer the curve hugs the top-left
+        corner, the better the model separates dogs from cats.
+      </p>
+      {% set op_fpr = cm[0][1] / n_cat %}{% set op_tpr = cm[1][1] / n_dog %}
+      <figure class="chart">
+        <svg id="roc" viewBox="0 0 {{ X0 + W + 16 }} {{ Y0 + H + 52 }}" role="img"
+             aria-label="ROC curve, area under the curve {{ '%.3f'|format(r.roc.auc) }}"
+             data-points='{{ r.roc.points|tojson }}' data-x0="{{ X0 }}" data-y0="{{ Y0 }}" data-w="{{ W }}" data-h="{{ H }}">
+          {% for t in [0, 0.25, 0.5, 0.75, 1] %}
+          <line class="grid" x1="{{ X0 }}" x2="{{ X0 + W }}" y1="{{ Y0 + (1 - t) * H }}" y2="{{ Y0 + (1 - t) * H }}"/>
+          <text class="tick" x="{{ X0 - 8 }}" y="{{ Y0 + (1 - t) * H + 4 }}" text-anchor="end">{{ (t * 100)|int }}%</text>
+          <text class="tick" x="{{ X0 + t * W }}" y="{{ Y0 + H + 18 }}" text-anchor="middle">{{ (t * 100)|int }}%</text>
+          {% endfor %}
+          <line class="ref" x1="{{ X0 }}" y1="{{ Y0 + H }}" x2="{{ X0 + W }}" y2="{{ Y0 }}"/>
+          <text class="ref-label" x="{{ X0 + W * 0.62 }}" y="{{ Y0 + H * 0.46 }}" transform="rotate(-38 {{ X0 + W * 0.62 }} {{ Y0 + H * 0.46 }})">random guessing</text>
+          <polyline class="line" points="{% for p in r.roc.points %}{{ '%.1f'|format(X0 + p[0] * W) }},{{ '%.1f'|format(Y0 + (1 - p[1]) * H) }} {% endfor %}"/>
+          <circle class="op" cx="{{ X0 + op_fpr * W }}" cy="{{ Y0 + (1 - op_tpr) * H }}" r="5"/>
+          <text class="op-label" x="{{ X0 + op_fpr * W + 10 }}" y="{{ Y0 + (1 - op_tpr) * H + 16 }}">threshold {{ r.threshold }}</text>
+          <line class="cross" id="roc-cross" y1="{{ Y0 }}" y2="{{ Y0 + H }}" hidden/>
+          <circle class="hover-dot" id="roc-dot" r="5" hidden/>
+          <text class="axis" x="{{ X0 + W / 2 }}" y="{{ Y0 + H + 40 }}" text-anchor="middle">Cats wrongly called dogs</text>
+          <text class="axis" transform="translate(12 {{ Y0 + H / 2 }}) rotate(-90)" text-anchor="middle">Dogs found</text>
+          <rect class="hit" x="{{ X0 }}" y="{{ Y0 }}" width="{{ W }}" height="{{ H }}"/>
+        </svg>
+        <figcaption>Area under the curve: {{ '%.3f'|format(r.roc.auc) }}. Hover to read any threshold.</figcaption>
+      </figure>
+    </div>
+
+    <div>
+      <h2>Is his certainty honest?</h2>
+      <p class="panel-intro">
+        Cases grouped by how certain he was. An honest inspector is right 90% of the time
+        when he says 90%: his bars would touch the dashed line.
+      </p>
+      {% set bins = r.reliability|selectattr('count')|list %}
+      {% set bw = W / 5 %}
+      <figure class="chart">
+        <svg viewBox="0 0 {{ X0 + W + 16 }} {{ Y0 + H + 52 }}" role="img" aria-label="Calibration chart: accuracy for each confidence band">
+          {% for t in [0, 0.25, 0.5, 0.75, 1] %}
+          <line class="grid" x1="{{ X0 }}" x2="{{ X0 + W }}" y1="{{ Y0 + (1 - t) * H }}" y2="{{ Y0 + (1 - t) * H }}"/>
+          <text class="tick" x="{{ X0 - 8 }}" y="{{ Y0 + (1 - t) * H + 4 }}" text-anchor="end">{{ (t * 100)|int }}%</text>
+          {% endfor %}
+          {% for b in bins %}
+          {% set x = X0 + (b.lo - 0.5) / 0.5 * W + 1 %}{% set w = (b.hi - b.lo) / 0.5 * W - 2 %}
+          {% set h = b.accuracy * H %}{% set y = Y0 + H - h %}{% set rr = [4, h]|min %}
+          <path class="bar" tabindex="0"
+                d="M{{ x }},{{ Y0 + H }} V{{ y + rr }} Q{{ x }},{{ y }} {{ x + rr }},{{ y }} H{{ x + w - rr }} Q{{ x + w }},{{ y }} {{ x + w }},{{ y + rr }} V{{ Y0 + H }} Z"
+                data-tip="Said {{ (b.lo * 100)|int }}–{{ (b.hi * 100)|int }}%: right {{ '%.0f'|format(b.accuracy * 100) }}% of the time ({{ '{:,}'.format(b.count) }} photos)"/>
+          {% endfor %}
+          {% for b in r.reliability %}
+          <text class="tick" x="{{ X0 + (b.lo - 0.5) / 0.5 * W + bw / 2 }}" y="{{ Y0 + H + 18 }}" text-anchor="middle">{{ (b.lo * 100)|int }}–{{ (b.hi * 100)|int }}</text>
+          {% endfor %}
+          <line class="ref" x1="{{ X0 }}" y1="{{ Y0 + H * 0.5 }}" x2="{{ X0 + W }}" y2="{{ Y0 }}"/>
+          <text class="axis" x="{{ X0 + W / 2 }}" y="{{ Y0 + H + 40 }}" text-anchor="middle">Inspector's certainty (%)</text>
+          <text class="axis" transform="translate(12 {{ Y0 + H / 2 }}) rotate(-90)" text-anchor="middle">Actually right</text>
+        </svg>
+        <figcaption>
+          Average confidence when right: {{ '%.0f'|format(r.mean_confidence_correct * 100) }}%;
+          when wrong: {{ '%.0f'|format(r.mean_confidence_wrong * 100) }}%.
+        </figcaption>
+      </figure>
+      <details class="table-view">
+        <summary>Show as a table</summary>
+        <table class="data">
+          <thead><tr><th scope="col">Confidence</th><th scope="col">Photos</th><th scope="col">Avg. confidence</th><th scope="col">Right</th></tr></thead>
+          <tbody>
+          {% for b in r.reliability %}
+            <tr><th scope="row">{{ (b.lo * 100)|int }}–{{ (b.hi * 100)|int }}%</th><td>{{ '{:,}'.format(b.count) }}</td>
+                <td>{{ ('%.1f%%'|format(b.mean_confidence * 100)) if b.count else '–' }}</td>
+                <td>{{ ('%.1f%%'|format(b.accuracy * 100)) if b.count else '–' }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </details>
+    </div>
+  </section>
+
+  {# ---------- Gatekeeper ---------- #}
+  {% if r.gatekeeper %}
+  <section class="panel">
+    <h2>The screening: “not a suspect”</h2>
+    <p class="panel-intro">
+      Before the inspector sees a photo, his assistant, a pretrained MobileNetV3 (ImageNet), adds up its probabilities for the
+      118 dog breeds and 5 cat classes it knows. Below the threshold, the photo is turned away.
+      This table shows the cost: how many <em>real</em> test cats and dogs it would wrongly turn away.
+    </p>
+    <table class="data gate">
+      <thead><tr><th scope="col">Threshold</th><th scope="col">Cats turned away</th><th scope="col">Dogs turned away</th><th scope="col">All</th></tr></thead>
+      <tbody>
+      {% for row in r.gatekeeper.rows %}
+        {% set current = (row.threshold - r.gatekeeper.threshold)|abs < 1e-9 %}
+        <tr class="{{ 'current' if current }}">
+          <th scope="row">{{ row.threshold }}{% if current %} (used){% endif %}</th>
+          <td>{{ '%.1f'|format(row.rejected_cat * 100) }}%</td>
+          <td>{{ '%.1f'|format(row.rejected_dog * 100) }}%</td>
+          <td>{{ '%.1f'|format(row.rejected_all * 100) }}%</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="fine">
+      Accuracy above is measured on every test photo, without this check. There is no set of
+      non-pet test photos yet, so how well it rejects “neither” images isn't measured here.
+    </p>
+  </section>
+  {% endif %}
+
+  {# ---------- Mistakes ---------- #}
+  {% if r.mistakes %}
+  <section class="panel">
+    <h2>Wrongful accusations</h2>
+    <p class="panel-intro">The cases he got wrong while being most certain of himself.</p>
+    <div class="mistakes">
+      {% for m in r.mistakes %}
+      <figure>
+        <img src="{{ url_for('static', filename=m.src) }}" alt="A {{ m.true|lower }} the model called a {{ m.pred|lower }}" loading="lazy" decoding="async">
+        <figcaption>A {{ m.true|lower }}, accused of being a {{ m.pred|lower }} ({{ '%.0f'|format(m.confidence * 100) }}% certain)</figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {# ---------- Method ---------- #}
+  <section class="panel notes">
+    <h2>How these numbers were made</h2>
+    <dl>
+      <dt>Data</dt><dd>Kaggle Dogs vs. Cats, split 60 / 20 / 20 into train, validation and test. The test split is used only here.</dd>
+      <dt>Model</dt><dd>3-block CNN trained from scratch, 128 × 128 input, 15 epochs. Weights <code>{{ r.model_sha256 }}</code>.</dd>
+      <dt>Evaluation</dt><dd>Same pre-processing as the web app. {% if r.skipped_unreadable %}{{ r.skipped_unreadable }} unreadable files skipped. {% endif %}Generated {{ r.generated }} with <code>metrics.py</code>.</dd>
+    </dl>
+  </section>
+  {% endif %}
+
+</main>
+
+<footer class="foot">
+  <p><a href="/">Open a new case</a></p>
+  <p>A student project in computer vision.</p>
+</footer>
+
+<div class="tip" id="tip" role="tooltip" hidden></div>
+
+<script>
+(function () {
+  var tip = document.getElementById('tip');
+  function place(x, y) {
+    var pad = 12, w = tip.offsetWidth, h = tip.offsetHeight;
+    var left = Math.min(Math.max(8, x + pad), window.innerWidth - w - 8);
+    var top = y - h - pad < 8 ? y + pad : y - h - pad;
+    tip.style.left = left + 'px'; tip.style.top = (top + window.scrollY) + 'px';
+  }
+  function show(text, x, y) { tip.textContent = text; tip.hidden = false; place(x, y); }
+  function hide() { tip.hidden = true; }
+
+  // Matrix cells and calibration bars: hover or keyboard focus.
+  document.querySelectorAll('[data-tip]').forEach(function (el) {
+    el.addEventListener('mousemove', function (e) { show(el.dataset.tip, e.clientX, e.clientY); });
+    el.addEventListener('mouseleave', hide);
+    el.addEventListener('focus', function () {
+      var b = el.getBoundingClientRect(); show(el.dataset.tip, b.left + b.width / 2, b.top);
+    });
+    el.addEventListener('blur', hide);
+  });
+
+  // ROC: crosshair snaps to the nearest point on the curve.
+  var roc = document.getElementById('roc');
+  if (!roc) return;
+  var pts = JSON.parse(roc.dataset.points);
+  var x0 = +roc.dataset.x0, y0 = +roc.dataset.y0, W = +roc.dataset.w, H = +roc.dataset.h;
+  var cross = document.getElementById('roc-cross'), dot = document.getElementById('roc-dot');
+  var hit = roc.querySelector('.hit');
+  function move(e) {
+    var pt = roc.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    var p = pt.matrixTransform(roc.getScreenCTM().inverse());
+    var fpr = Math.min(1, Math.max(0, (p.x - x0) / W)), best = pts[0];
+    pts.forEach(function (q) { if (Math.abs(q[0] - fpr) < Math.abs(best[0] - fpr)) best = q; });
+    var cx = x0 + best[0] * W, cy = y0 + (1 - best[1]) * H;
+    cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.removeAttribute('hidden');
+    dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.removeAttribute('hidden');
+    show('Call it a dog above ' + Math.round(best[2] * 100) + '%: finds ' + Math.round(best[1] * 100) +
+         '% of dogs, wrongly flags ' + Math.round(best[0] * 100) + '% of cats', e.clientX, e.clientY);
+  }
+  hit.addEventListener('mousemove', move);
+  hit.addEventListener('mouseleave', function () { cross.setAttribute('hidden', ''); dot.setAttribute('hidden', ''); hide(); });
+})();
+</script>
+</body>
+</html>

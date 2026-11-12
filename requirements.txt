@@ -1,7 +1,8 @@
-Flask==3.1.3
-gunicorn==25.1.0
-numpy==2.4.2
-matplotlib==3.10.8
-pillow==12.1.1
-opencv-python==4.13.0.92
-scikit-learn==1.8.0
+# CPU-only PyTorch wheels: a fraction of the size of the default CUDA build.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.2
+torchvision>=0.17   # only for the MobileNetV3 gatekeeper architecture (a few MB)
+numpy>=1.26
+pillow>=10.0
+flask>=3.0
+gunicorn>=22.0

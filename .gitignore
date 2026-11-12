@@ -1,13 +1,26 @@
-# Python cache
-__pycache__/
-*.pyc
-
-# Virtual environments
-woof/  
+# Datasets (download from Kaggle, never commit)
+training-data/
 data/
 
-# OS files
+# Python
+__pycache__/
+*.pyc
+.venv/
+woof/
+venv/
+.ipynb_checkpoints/
+
+# OS / editors
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
 
-commands.txt
+# Weights: only the final model is committed (through Git LFS, see INSTRUCTIONS.md)
+saved_models/*
+!saved_models/.gitkeep
+!saved_models/dogcat_cnn.pth
+!saved_models/gatekeeper_mobilenet_v3_small.pth
+
+# Personal setup notes (not part of the project)
+INSTRUCTIONS.md

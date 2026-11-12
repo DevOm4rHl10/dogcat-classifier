@@ -1,0 +1,2 @@
+# Training (classifier.py) and evaluation (metrics.py) need nothing beyond the app's packages.
+-r requirements.txt
