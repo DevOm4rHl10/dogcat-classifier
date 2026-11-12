@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Meowf Investigations · Dog or cat?</title>
-  <meta name="description" content="Submit a photo and Inspector Grad, a convolutional neural network, decides whether it shows a dog or a cat, then marks the clues it used in red ink (Grad-CAM).">
+  <meta name="description" content="Submit a photo and Inspector GRADget, a convolutional neural network, decides whether it shows a dog or a cat, then marks the clues it used in red ink (Grad-CAM).">
   <meta name="theme-color" content="#3a2c22">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='13' cy='13' r='9' fill='%23fbf7ee' stroke='%232a2420' stroke-width='3.5'/><path d='M20 20l8 8' stroke='%232a2420' stroke-width='5' stroke-linecap='round'/></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -125,7 +125,7 @@
           <h2 class="intake-title" id="intake-title">Open a new case</h2>
           {% else %}
           <h1 class="intake-title" id="intake-title">Dog or cat?</h1>
-          <p class="lede">Submit a photo as evidence. Inspector Grad, a convolutional neural network, studies it, names the animal, and marks the clues he relied on in red ink.</p>
+          <p class="lede">Submit a photo as evidence. Inspector GRADget, a convolutional neural network, studies it, names the animal, and marks the clues he relied on in red ink.</p>
           {% endif %}
 
           <form class="uploader" id="uploader" action="/predict" method="post" enctype="multipart/form-data">
@@ -147,7 +147,7 @@
         <div class="intake-side">
           <figure class="inspector">
             {% include "_inspector.html" %}
-            <figcaption>Inspector Grad. Trained on 15,000 cases. Once called a bin bag a dog, which is why he now has an assistant.</figcaption>
+            <figcaption>Inspector GRADget. Trained on 15,000 cases. Once called a bin bag a dog, which is why he now has an assistant.</figcaption>
           </figure>
           <ol class="procedure" aria-label="How it works">
             <li>Attach a photo of one dog or one cat.</li>

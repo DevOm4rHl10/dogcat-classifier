@@ -1,2 +1,7 @@
-# Training (classifier.py) and evaluation (metrics.py) need nothing beyond the app's packages.
+# Training, evaluation and model export (not installed on the server).
 -r requirements.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.2
+torchvision>=0.17
+onnx>=1.16
+onnxscript>=0.1

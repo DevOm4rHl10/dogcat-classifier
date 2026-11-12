@@ -21,6 +21,10 @@ saved_models/*
 !saved_models/.gitkeep
 !saved_models/dogcat_cnn.pth
 !saved_models/gatekeeper_mobilenet_v3_small.pth
+!saved_models/cnn_features.onnx
+!saved_models/cnn_head.npz
+!saved_models/gatekeeper.onnx
+!saved_models/gatekeeper_classes.json
 
 # Personal setup notes (not part of the project)
 INSTRUCTIONS.md

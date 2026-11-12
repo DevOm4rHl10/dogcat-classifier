@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Case archive · Meowf Investigations</title>
-  <meta name="description" content="Inspector Grad's record: how the dog-vs-cat CNN performs on held-out test photos: confusion matrix, precision, recall, F1, ROC curve and calibration.">
+  <meta name="description" content="Inspector GRADget's record: how the dog-vs-cat CNN performs on held-out test photos: confusion matrix, precision, recall, F1, ROC curve and calibration.">
   <meta name="theme-color" content="#3a2c22">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='13' cy='13' r='9' fill='%23fbf7ee' stroke='%232a2420' stroke-width='3.5'/><path d='M20 20l8 8' stroke='%232a2420' stroke-width='5' stroke-linecap='round'/></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28,7 +28,7 @@
     {% set cm = r.confusion_matrix.rows_true_cols_pred %}
     {% set n_cat = cm[0][0] + cm[0][1] %}{% set n_dog = cm[1][0] + cm[1][1] %}
     <p class="lede">
-      Inspector Grad's record on {{ '{:,}'.format(r.n) }} closed cases: photos he never saw during
+      Inspector GRADget's record on {{ '{:,}'.format(r.n) }} closed cases: photos he never saw during
       training or tuning, {{ '{:,}'.format(n_cat) }} cats and {{ '{:,}'.format(n_dog) }} dogs from the Kaggle Dogs vs. Cats dataset.
     </p>
     {% endif %}

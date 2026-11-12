@@ -1,7 +1,5 @@
-# CPU-only PyTorch wheels: a fraction of the size of the default CUDA build.
---extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.2
-torchvision>=0.17   # only for the MobileNetV3 gatekeeper architecture (a few MB)
+# Serving only: the web app runs on ONNX Runtime, no PyTorch (see serving.py).
+onnxruntime>=1.18
 numpy>=1.26
 pillow>=10.0
 flask>=3.0

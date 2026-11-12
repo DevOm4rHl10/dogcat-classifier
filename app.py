@@ -2,6 +2,9 @@
 Meowf Investigations: check that a photo shows a dog or a cat, classify it, and
 explain the decision with Grad-CAM (drawn as red-ink "evidence"). Test-set results are shown at /metrics.
 
+Production inference uses ONNX Runtime + NumPy (serving.py), not PyTorch, so the app fits in
+a 512 MB server. Export the models first: python scripts/export_onnx.py
+
 Run locally:   flask --app app run --debug
 Production:    gunicorn -c gunicorn.conf.py app:app
 """
@@ -12,21 +15,18 @@ import random
 from io import BytesIO
 
 import numpy as np
-import torch
-import torch.nn.functional as F
 from flask import Flask, render_template, request
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from classifier import DogCatCNN
-from inference import CLASSES, INPUT_SIZE, Gatekeeper, cnn_tensor, load_image
+from serving import DogCatModel, Gatekeeper, cnn_array, load_image
 
 # ---------------------------------------------------------------------------
 # Configuration (override with environment variables)
 # ---------------------------------------------------------------------------
-MODEL_PATH = os.environ.get("MODEL_PATH", "saved_models/dogcat_cnn.pth")
-GATE_PATH = os.environ.get("GATE_PATH", "saved_models/gatekeeper_mobilenet_v3_small.pth")
+MODELS = os.environ.get("MODELS_DIR", "saved_models")
 GATE_THRESHOLD = float(os.environ.get("GATE_THRESHOLD", "0.2"))
-DISPLAY_SIZE = 384   # size of the Grad-CAM image sent to the browser
+THREADS = int(os.environ.get("INFERENCE_THREADS", "1"))
+DISPLAY_SIZE = 384   # size of the evidence image sent to the browser
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # reject uploads over 10 MB
@@ -35,55 +35,16 @@ METRICS_JSON = os.path.join(app.root_path, "static", "metrics", "metrics.json")
 # ---------------------------------------------------------------------------
 # Models: loaded once, when the module is imported (gunicorn preloads it)
 # ---------------------------------------------------------------------------
-torch.set_num_threads(int(os.environ.get("TORCH_THREADS", "2")))
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = DogCatModel(os.path.join(MODELS, "cnn_features.onnx"), os.path.join(MODELS, "cnn_head.npz"), THREADS)
 
-model = DogCatCNN().to(device)
-model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
-model.eval()
-for p in model.parameters():          # Grad-CAM only needs gradients w.r.t. activations
-    p.requires_grad_(False)
-
-if os.path.exists(GATE_PATH):
-    gatekeeper = Gatekeeper(GATE_PATH, device, GATE_THRESHOLD)
+gate_onnx = os.path.join(MODELS, "gatekeeper.onnx")
+gate_classes = os.path.join(MODELS, "gatekeeper_classes.json")
+if os.path.exists(gate_onnx) and os.path.exists(gate_classes):
+    gatekeeper = Gatekeeper(gate_onnx, gate_classes, GATE_THRESHOLD, THREADS)
 else:
     gatekeeper = None
-    app.logger.warning("Gatekeeper weights not found at %s: every photo goes straight to the CNN. "
-                       "Run scripts/download_gatekeeper.py to enable it.", GATE_PATH)
-
-
-# ---------------------------------------------------------------------------
-# Prediction + Grad-CAM in a single forward/backward pass
-# ---------------------------------------------------------------------------
-def predict_with_gradcam(x: torch.Tensor):
-    """Return (label, confidence, cam) where cam is an INPUT_SIZE x INPUT_SIZE array in [0, 1]."""
-    with torch.no_grad():
-        feats = model.features(x)          # 1 x C x h x w, no graph needed for the conv layers
-    # Local leaf tensor: no hooks on the shared model, so concurrent requests can't mix gradients.
-    feats = feats.detach().requires_grad_(True)
-    with torch.enable_grad():
-        logit = model.classify(feats)      # 1 x 1, raw score: > 0 means dog
-
-        p_dog = torch.sigmoid(logit).item()
-        is_dog = p_dog > 0.5
-
-        # Explain the class that was predicted: +logit for dog, -logit for cat.
-        # Using the logit (not the sigmoid) avoids vanishing gradients on confident images.
-        score = logit if is_dog else -logit
-        score.sum().backward()
-
-    grads = feats.grad[0]                  # C x h x w
-    acts = feats.detach()[0]
-    weights = grads.mean(dim=(1, 2))       # global-average-pooled gradients
-    cam = F.relu((weights[:, None, None] * acts).sum(dim=0))
-    cam = F.interpolate(cam[None, None], size=(INPUT_SIZE, INPUT_SIZE),
-                        mode="bilinear", align_corners=False)[0, 0]
-    cam = cam - cam.min()
-    cam = cam / (cam.max() + 1e-8)
-
-    label = CLASSES[1] if is_dog else CLASSES[0]
-    confidence = p_dog if is_dog else 1.0 - p_dog
-    return label, confidence, cam.cpu().numpy()
+    app.logger.warning("Gatekeeper not found in %s: every photo goes straight to the CNN. "
+                       "Run scripts/download_gatekeeper.py, then scripts/export_onnx.py.", MODELS)
 
 
 # Evidence print: the photo as a sepia print, with the strongest Grad-CAM evidence
@@ -147,7 +108,7 @@ def predict():
             return render_template("index.html", rejected=True,
                                    looks_like=readable(top_label), pet_prob=pet_prob)
 
-    label, confidence, cam = predict_with_gradcam(cnn_tensor(img).unsqueeze(0).to(device))
+    label, confidence, cam = model.predict_with_gradcam(cnn_array(img))
     return render_template(
         "index.html",
         prediction=label,
